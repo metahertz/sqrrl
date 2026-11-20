@@ -19,6 +19,7 @@
   <a href="#what-it-does">What it does</a> ·
   <a href="#how-it-differs-from-mdbrain">How it differs from MDBrain</a> ·
   <a href="#architecture">Architecture</a> ·
+  <a href="#why-mongodb-atlas-for-data-and-embeddings">Why Atlas</a> ·
   <a href="#getting-started">Getting started</a> ·
   <a href="#thanks">Thanks</a>
 </p>
@@ -194,6 +195,57 @@ every day.
 | `packages/client` | TypeScript HTTP client |
 | `packages/inference-canary` | Contamination probe for shared LLM nodes |
 | `packages/lib` | Shared utilities |
+
+## Why MongoDB Atlas for data and embeddings
+
+A personal brain takes in very different things: a note, a calendar event
+with attendees, an email thread, a Slack day, a PDF, a photo, a voice memo.
+Each changes on its own schedule, and every change has to be searchable by
+words and by meaning straight away. SQRRL keeps all of it in MongoDB and lets
+Atlas do the work that would otherwise be a second system.
+
+**Embeddings without an embedding pipeline.** The vector indexes on raw
+items and on wiki pages use Atlas **automated embedding** (`autoEmbed`, with
+Voyage `voyage-4-large`, through the Atlas Model API). SQRRL writes a
+document; Atlas embeds it, and re-embeds it whenever its text changes. There
+is no embedding job, no queue, no vector store to keep in sync, and nothing
+to backfill when a note is edited or a page is rewritten. Anything that isn't
+text becomes text first (`packages/extract`: OCR for PDFs, a vision model for
+images, Whisper for recordings), so every source is embedded the same way.
+
+**One document model for every kind of source.** Raw items share a small
+common core (`source`, `sourceId`, `kind`, `text`, `occurredAt`, `author`,
+`participants`, `thread`, `channel`) and keep everything source-specific in
+the same document: a meeting's attendees and status, an email's headers and
+recipients, a Slack message's thread. Adding a source means writing a
+connector, not migrating a schema. Wiki pages work the same way: a person, a
+task with its `taskCard`, or a meeting are one collection with optional parts.
+Updates are cheap: a changed item is a new version (`version`, with only the
+latest marked `current`), so history is kept and searches only see what is
+true now.
+
+**Search by words and meaning in one query.** Each collection has an Atlas
+Search index (Lucene text) next to its vector index, with filter fields
+inside the index (scope on both; source, author, channel and date on raw
+items; kind, trust and state on pages). A query runs both and merges
+them with **`$rankFusion`** (reciprocal rank fusion), filtered to one scope
+before ranking; Voyage reranks the result. Time-bounded questions ("what did
+Kai say last week") are a date filter inside the same search.
+
+**The rest of MongoDB that SQRRL leans on:**
+
+| Feature | Used for |
+| --- | --- |
+| `$graphLookup` | Following links from the pages a search found to the people, topics and tasks around them (`packages/wiki-engine/src/wiki-search.ts`) |
+| Multi-document transactions | A sync batch is written all or nothing, and so is retiring what a source no longer has; a page change and its revision are saved together |
+| `$jsonSchema` validators | Wiki pages, revisions and raw items are validated by the database, not just in code |
+| Unique and partial indexes | One current version per source item, one pending suggestion per task, one token per live API key |
+| TTL indexes | Finished jobs in the decision queue expire on their own after a week |
+| Atomic `findOneAndUpdate` | Page edits checked against the revision they started from, claiming a queued decision job, revoking a key |
+| Atlas Local (`docker/mongodb`) | The same search, vector and auto-embedding features on a laptop, for development and tests |
+
+The result is one database for the source text, the wiki, the graph, the
+vectors, the search and the work queues, and one thing to back up.
 
 ## Getting started
 
