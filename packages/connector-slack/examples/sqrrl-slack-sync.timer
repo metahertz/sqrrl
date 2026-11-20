@@ -1,0 +1,12 @@
+# Runs sqrrl-slack-sync.service 10 minutes after boot, then 30 minutes after
+# each pass finishes, so a long backfill never overlaps the next run.
+[Unit]
+Description=Run the SQRRL Slack connector every 30 minutes
+
+[Timer]
+OnBootSec=10min
+OnUnitInactiveSec=30min
+Persistent=true
+
+[Install]
+WantedBy=timers.target

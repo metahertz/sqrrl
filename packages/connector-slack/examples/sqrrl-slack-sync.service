@@ -1,0 +1,17 @@
+# systemd user unit: one Slack sync pass. Install with the timer:
+#   cp sqrrl-slack-sync.{service,timer} ~/.config/systemd/user/
+#   systemctl --user daemon-reload
+#   systemctl --user enable --now sqrrl-slack-sync.timer
+# Adjust the paths below to where you keep the script and logs.
+[Unit]
+Description=SQRRL Slack connector (one sync pass)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=%h/sqrrl/packages/connector-slack/examples/slack-sync.sh
+# The first run backfills SLACK_BACKFILL_DAYS of history and can take a while.
+TimeoutStartSec=6h
+StandardOutput=append:%h/.local/state/sqrrl/slack-sync.log
+StandardError=append:%h/.local/state/sqrrl/slack-sync.log

@@ -70,7 +70,7 @@ company knowledge base. It assumes:
 | --- | --- |
 | Apple Notes, Calendar, Mail | A small Mac agent (JXA and Swift, run by launchd) exports and submits them. See `apps/web/public/apple-notes/`. |
 | Nextcloud files and Notes | `packages/connector-nextcloud`: documents, PDFs (with OCR), images (described by a vision model), HEIC, and audio and video recordings (transcribed). |
-| Slack | `packages/connector-slack`: a read-only user token covering channels, private channels, DMs and group DMs. Set it up from the console. |
+| Slack | `packages/connector-slack`: a read-only user token covering channels, private channels, DMs and group DMs. Set it up from the console; `packages/connector-slack/examples/` has a script and systemd timer to run it. |
 | Anything else | `POST /v1/raw/sync` and `POST /v1/raw/mail` accept raw items from your own scripts. |
 
 Raw items keep their source-native shape (thread, channel, author,
