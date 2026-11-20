@@ -1,3 +1,10 @@
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="assets/logo/sqrrl-dark.svg">
+    <img src="assets/logo/sqrrl.svg" alt="SQRRL logo: a squirrel" width="96" height="96">
+  </picture>
+</p>
+
 <h1 align="center">SQRRL</h1>
 
 <p align="center">
