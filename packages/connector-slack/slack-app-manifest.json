@@ -1,0 +1,29 @@
+{
+	"_metadata": { "major_version": 1, "minor_version": 1 },
+	"display_information": {
+		"name": "sqrrl sync",
+		"description": "Read-only sync of my channels and DMs into my sqrrl second brain.",
+		"background_color": "#0f766e"
+	},
+	"oauth_config": {
+		"scopes": {
+			"user": [
+				"channels:history",
+				"channels:read",
+				"groups:history",
+				"groups:read",
+				"im:history",
+				"im:read",
+				"mpim:history",
+				"mpim:read",
+				"users:read",
+				"users:read.email"
+			]
+		}
+	},
+	"settings": {
+		"org_deploy_enabled": false,
+		"socket_mode_enabled": false,
+		"token_rotation_enabled": false
+	}
+}

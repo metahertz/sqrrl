@@ -1,0 +1,31 @@
+{
+	"name": "@sqrrl/web",
+	"version": "2.0.0",
+	"private": true,
+	"scripts": {
+		"dev": "next dev -p 3040",
+		"build": "next build",
+		"start": "next start -p 3040",
+		"check-types": "next typegen && node ../../node_modules/typescript/bin/tsc --noEmit -p tsconfig.json",
+		"test": "vitest run"
+	},
+	"dependencies": {
+		"@sqrrl/client": "workspace:*",
+		"graphology": "0.26.0",
+		"graphology-layout-forceatlas2": "0.10.1",
+		"graphology-types": "0.24.8",
+		"gsap": "3.15.0",
+		"next": "^15.1.0",
+		"react": "^19.0.0",
+		"react-dom": "^19.0.0",
+		"sigma": "3.0.2",
+		"typescript": "^5.8.0"
+	},
+	"devDependencies": {
+		"@types/node": "^22.10.0",
+		"@types/react": "^19.0.0",
+		"@types/react-dom": "^19.2.4",
+		"@vitejs/plugin-react": "^6.1.0",
+		"vitest": "^4.1.0"
+	}
+}

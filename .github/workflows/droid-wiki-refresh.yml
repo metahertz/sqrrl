@@ -1,0 +1,94 @@
+name: Droid Wiki Refresh
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  wiki-refresh:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install Factory Droid
+        run: curl -fsSL https://app.factory.ai/cli | sh
+
+      - name: Configure git identity
+        run: |
+          git config --global user.name "Droid Wiki Bot"
+          git config --global user.email "actions@github.com"
+
+      # This workflow is model-agnostic: no provider, endpoint, or model is
+      # baked into the file. Two routes, chosen by repository settings:
+      #
+      # 1. BYOK (bring your own key — Anthropic, OpenAI, or any
+      #    OpenAI-compatible endpoint). Set these repository variables:
+      #      DROID_PROVIDER      anthropic | openai | generic-chat-completion-api
+      #      DROID_MODEL_ID      e.g. claude-sonnet-4-5-20250929, gpt-5.5,
+      #                          openai/gpt-oss-120b, gemini-2.5-pro, ...
+      #      DROID_BASE_URL      e.g. https://api.anthropic.com,
+      #                          https://api.openai.com/v1,
+      #                          https://openrouter.ai/api/v1, ...
+      #    and this repository secret:
+      #      DROID_PROVIDER_API_KEY    your provider API key
+      #    Provider guide: https://docs.factory.ai/model-independence/byok
+      #
+      # 2. Factory-managed (default; used when DROID_PROVIDER is unset).
+      #    Optionally set this repository variable:
+      #      DROID_MODEL         any Factory catalog model id
+      #                          (defaults to claude-sonnet-4-5-20250929)
+      #    Model catalog: https://docs.factory.ai/models
+      - name: Configure custom model (BYOK route)
+        if: ${{ vars.DROID_PROVIDER != '' }}
+        env:
+          DROID_MODEL_ID: ${{ vars.DROID_MODEL_ID }}
+          DROID_PROVIDER: ${{ vars.DROID_PROVIDER }}
+          DROID_BASE_URL: ${{ vars.DROID_BASE_URL }}
+          DROID_PROVIDER_API_KEY: ${{ secrets.DROID_PROVIDER_API_KEY }}
+        run: |
+          mkdir -p ~/.factory
+          jq -n \
+            --arg model "$DROID_MODEL_ID" \
+            --arg provider "$DROID_PROVIDER" \
+            --arg baseUrl "$DROID_BASE_URL" \
+            --arg apiKey "$DROID_PROVIDER_API_KEY" \
+            '{customModels: [{
+              model: $model,
+              displayName: "CI Model",
+              baseUrl: $baseUrl,
+              apiKey: $apiKey,
+              provider: $provider,
+              maxOutputTokens: 32768
+            }]}' > ~/.factory/settings.json
+
+      - name: Generate wiki (BYOK model)
+        if: ${{ vars.DROID_PROVIDER != '' }}
+        timeout-minutes: 60
+        run: >-
+          droid exec
+          --output-format stream-json
+          --skip-permissions-unsafe
+          --model "custom:CI-Model-0"
+          "/wiki Generate the wiki from the repository. Upload to GitHub Wiki only. Skip Factory Cloud upload and video generation."
+        env:
+          FACTORY_API_KEY: ${{ secrets.FACTORY_API_KEY }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Generate wiki (Factory-managed model)
+        if: ${{ vars.DROID_PROVIDER == '' }}
+        timeout-minutes: 60
+        run: >-
+          droid exec
+          --output-format stream-json
+          --skip-permissions-unsafe
+          --model "${{ vars.DROID_MODEL || 'claude-sonnet-4-5-20250929' }}"
+          --reasoning-effort off
+          "/wiki Generate the wiki from the repository. Upload to GitHub Wiki only. Skip Factory Cloud upload and video generation."
+        env:
+          FACTORY_API_KEY: ${{ secrets.FACTORY_API_KEY }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

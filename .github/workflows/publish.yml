@@ -1,0 +1,78 @@
+name: Publish Packages
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  publish:
+    name: Build & Publish
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.2.5
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "22"
+          registry-url: "https://registry.npmjs.org"
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Build
+        run: bun run build
+
+      - name: Test
+        run: bun run test
+
+      - name: Check publishability
+        run: bun run check-publishability
+
+      - name: Publish packages
+        run: |
+          package_output=$(bun scripts/publish-package-cohort.ts paths)
+          mapfile -t packages <<< "$package_output"
+          if [ "${#packages[@]}" -eq 0 ]; then
+            echo "No publishable packages resolved."
+            exit 1
+          fi
+
+          for pkg in "${packages[@]}"
+          do
+            name=$(node -p "require('./$pkg/package.json').name")
+            version=$(node -p "require('./$pkg/package.json').version")
+
+            if npm view "$name@$version" version >/dev/null 2>&1; then
+              echo "Skipping $name@$version; already published."
+              continue
+            fi
+
+            echo "Publishing $name@$version..."
+            publish_log=$(mktemp)
+            if (cd "$pkg" && npm publish --access public --provenance) >"$publish_log" 2>&1; then
+              cat "$publish_log"
+              rm -f "$publish_log"
+              continue
+            fi
+
+            cat "$publish_log"
+            if grep -q "previously published versions" "$publish_log"; then
+              echo "Skipping $name@$version; npm reports this exact version was already published."
+              rm -f "$publish_log"
+              continue
+            fi
+
+            rm -f "$publish_log"
+            exit 1
+          done
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

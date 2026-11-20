@@ -1,0 +1,73 @@
+---
+title: API Overview
+description: Sqrrl HTTP API endpoint reference.
+icon: "unplug"
+---
+
+The Sqrrl API server runs at `http://127.0.0.1:3847` by default (via `apps/api`).
+
+The API is the app-facing surface of the Sqrrl Company Brain framework. It can
+be used directly from services or through the TypeScript client, AI SDK tools,
+and MCP server.
+
+## Endpoints
+
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/health` | Service health |
+| GET | `/ready` | Dependency and Memongo contract readiness |
+| GET | `/openapi.json` | OpenAPI document |
+
+### Memory operations
+
+| Method | Path | Description |
+|--------|------|-------------|
+| POST | `/v1/add` | Add content to memory |
+| POST | `/v1/write-event` | Write a conversation event (any role) |
+| POST | `/v1/write-structured` | Write a structured memory entry |
+| POST | `/v1/write-procedure` | Write a procedure memory |
+| POST | `/v1/search` | Search memory (hybrid vector + full-text) |
+| POST | `/v1/search-detailed` | Search with passes, metadata, and evidence |
+| POST | `/v1/search-kb` | Search the knowledge base |
+| POST | `/v1/profile` | Synthesize a user profile from memory |
+| POST | `/v1/context-bundle` | Build a prompt-ready context bundle |
+| POST | `/v1/memory/feedback` | Confirm, correct, or reject memory relevance |
+
+`POST /v1/add` and `POST /v1/write-event` require an `Idempotency-Key`
+header. Reuse the same key only for an exact replay of the same scoped write.
+
+### Lifecycle operations
+
+| Method | Path | Description |
+|--------|------|-------------|
+| POST | `/v1/lifecycle/get` | Get a structured or procedure memory by stable handle |
+| POST | `/v1/lifecycle/update` | Update a structured or procedure memory by stable handle |
+| POST | `/v1/lifecycle/delete` | Delete or invalidate a structured or procedure memory by stable handle |
+| POST | `/v1/lifecycle/history` | Inspect lifecycle history by stable handle |
+
+### Administrative product operations
+
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/v1/admin/deliveries` | Inspect redacted durable delivery state |
+
+Provider status and embedding/vector probes are control operations, not tenant
+product operations. They are intentionally absent from the REST API, OpenAPI
+document, TypeScript client, MCP server, AI tools, and web console. Operators
+should use the server-local `/health` and `/ready` endpoints; readiness composes
+Memongo bridge compatibility with wiki-store readiness.
+
+## Authentication
+
+Set `SQRRL_API_KEY` for every shared or network-exposed deployment. If no
+admin or scoped key is configured, `/v1` routes stay open for trusted local
+development and the API logs a startup warning.
+
+When `SQRRL_API_KEY` is set, all requests must include a `Bearer` token:
+
+```bash
+http POST http://127.0.0.1:3847/v1/search \
+  Authorization:"Bearer your-api-key" \
+  query="search query" \
+  sessionKey="user-123"
+```

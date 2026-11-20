@@ -1,0 +1,32 @@
+---
+title: Configuration
+description: Configure the SQRRL wiki store, Memongo gateway, and API.
+icon: "settings"
+---
+
+## Required runtime variables
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `SQRRL_WIKI_MONGODB_URI` | Transaction-capable MongoDB URI for SQRRL-owned wiki collections | required |
+| `MEMONGO_API_URL` | Compatible Memongo HTTP base URL | required |
+| `MEMONGO_API_KEY` | Memongo tenant API key | required |
+| `SQRRL_API_KEY` | Bearer token for SQRRL clients | none |
+
+## Optional variables
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `SQRRL_WIKI_DATABASE` | Wiki database name | `sqrrl_wiki` |
+| `SQRRL_WIKI_COLLECTION_PREFIX` | Wiki collection prefix | `sqrrl_` |
+| `SQRRL_DELIVERY_RECONCILE_MS` | Durable delivery reconciliation interval | `5000` |
+| `MEMONGO_CONTROL_API_KEY` | Separate Memongo control-plane key | none |
+| `MEMONGO_TIMEOUT_MS` | Upstream request timeout | `10000` |
+| `MEMONGO_COMPATIBILITY_TTL_MS` | Compatibility-check cache duration | `60000` |
+| `MEMONGO_ALLOW_INSECURE_LOCAL` | Allow local HTTP when set to `1` | disabled |
+| `SQRRL_API_PORT` | API listen port | `3847` |
+| `SQRRL_API_HOST` | API bind address | `127.0.0.1` |
+
+SQRRL fails readiness when Memongo is unavailable or its contract version or
+SHA-256 differs from the pinned contract. The wiki store fails closed when
+transactions are unavailable.

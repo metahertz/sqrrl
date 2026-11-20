@@ -1,0 +1,49 @@
+{
+	"name": "@sqrrl/lib",
+	"version": "2.0.0",
+	"description": "Shared types and utilities for Sqrrl packages",
+	"type": "module",
+	"license": "Apache-2.0",
+	"author": "SQRRL contributors (derived from MDBrain by Rom Iluz)",
+	"keywords": [
+		"sqrrl",
+		"runtime",
+		"types",
+		"utilities"
+	],
+	"main": "./dist/index.js",
+	"types": "./dist/index.d.ts",
+	"files": [
+		"dist",
+		"README.md"
+	],
+	"exports": {
+		".": {
+			"types": "./dist/index.d.ts",
+			"default": "./dist/index.js"
+		},
+		"./types": {
+			"types": "./dist/types.d.ts",
+			"default": "./dist/types.js"
+		},
+		"./types/memory": {
+			"types": "./dist/types.memory.d.ts",
+			"default": "./dist/types.memory.js"
+		},
+		"./legacy-env": {
+			"types": "./dist/legacy-env.d.ts",
+			"default": "./dist/legacy-env.js"
+		}
+	},
+	"scripts": {
+		"build": "node ../../node_modules/typescript/bin/tsc -p tsconfig.json",
+		"check-types": "node ../../node_modules/typescript/bin/tsc --noEmit -p tsconfig.json",
+		"test": "vitest run"
+	},
+	"devDependencies": {
+		"typescript": "^5.8.0",
+		"@types/node": "^22.10.0",
+		"vitest": "^4.1.0"
+	},
+	"private": true
+}

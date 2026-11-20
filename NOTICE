@@ -1,0 +1,30 @@
+SQRRL
+Copyright 2026 The SQRRL Authors
+https://github.com/metahertz/sqrrl
+
+SQRRL is a derivative work of MDBrain:
+
+  MDBrain
+  Copyright 2026 The MDBrain Authors
+  https://github.com/romiluz13/mdbrain
+
+This product includes software developed by the MDBrain project, notably
+the wiki engine (packages/wiki-engine), the HTTP API, client, MCP server and
+web console it grew from. SQRRL's changes include its own raw-item layer and
+distillers (packages/source-layer), the source connectors, people identity,
+task review, the transcriber and the removal of the Memongo memory layer.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    https://www.apache.org/licenses/LICENSE-2.0
+
+-------------------------------------------------------------------------------
+Third-party attributions
+-------------------------------------------------------------------------------
+
+The local MongoDB development stack under docker/mongodb/ is adapted from
+mdb-community-search by John Underwood
+(https://github.com/JohnGUnderwood/mdb-community-search), a MongoDB engineer
+reference implementation.

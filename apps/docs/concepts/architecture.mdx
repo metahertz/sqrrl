@@ -1,0 +1,49 @@
+---
+title: Architecture
+description: SQRRL's service boundary, package structure, and data flow.
+icon: "sitemap"
+---
+
+SQRRL owns the governed company wiki. Memongo owns long-term memory. SQRRL
+uses Memongo exclusively through a pinned, versioned HTTP contract and never
+imports Memongo storage internals.
+
+## Packages
+
+| Package | Role |
+|---------|------|
+| `@sqrrl/wiki-engine` | Governed wiki schema, CRUD, search, revisions, OKF, and connectors |
+| `@sqrrl/memory-bridge` | Compatibility-checked Memongo HTTP gateway |
+| `@sqrrl/memory` | Aggregate client and gateway exports |
+| `@sqrrl/client` | TypeScript HTTP client SDK |
+| `@sqrrl/tools` | AI SDK tool helpers for supported operations |
+| `@sqrrl/lib` | Shared types and utilities |
+
+## Runtime flow
+
+```text
+Client SDK / HTTP -> apps/api -> memory-bridge -> Memongo HTTP -> Memongo storage
+                              \-> WikiStore -> wiki MongoDB
+                              \-> delivery intents -> receipt-gated promotion
+
+MCP client (stdio) -> apps/mcp -> client SDK -> apps/api
+```
+
+The wiki MongoDB contains only SQRRL-owned collections. Production requires
+transactions. Event-producing memory writes first persist a durable local
+intent, then dispatch to Memongo with a caller-owned idempotency key. Explicit
+wiki promotion runs only after a Memongo receipt is persisted. A bounded
+background reconciler resumes stale, retryable, ambiguous, and
+promotion-pending intents with the original key.
+
+## Apps
+
+| App | Port | Description |
+|-----|------|-------------|
+| `apps/api` | 3847 | Hono HTTP API and orchestration gateway |
+| `apps/mcp` | stdio | MCP server wrapping the HTTP API |
+| `apps/web` | 3040 | Next.js operator console |
+| `apps/docs` | 3003 | Product documentation |
+
+`GET /health` reports process liveness. `GET /ready` verifies the pinned
+Memongo contract and a live transaction against the wiki store.

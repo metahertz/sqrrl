@@ -1,0 +1,64 @@
+---
+title: MCP memory tools
+description: Run the Sqrrl MCP server and expose memory tools to MCP-compatible clients.
+icon: "terminal"
+---
+
+The MCP server at `apps/mcp` exposes Sqrrl memory operations over stdio. Use
+it as one adapter path for the Sqrrl Company Brain framework.
+
+MCP clients should be read-first. They can search memory and build context
+bundles freely, but should write memory only when the user or workflow
+explicitly asks to remember, update, or forget something.
+
+## Starting the MCP server
+
+```bash
+cd apps/mcp
+SQRRL_API_URL=http://127.0.0.1:3847 \
+SQRRL_API_KEY=local-dev-secret \
+bun run start
+```
+
+The server communicates over stdin/stdout using the MCP protocol.
+
+## Primary operations
+
+The MCP server exposes tools for recall, explicit writes, lifecycle changes,
+and governed wiki access:
+
+| Tool | Description |
+|------|-------------|
+| `sqrrl_search` | Search memory with hybrid vector + full-text |
+| `sqrrl_search_detailed` | Search with plans, passes, metadata, and evidence |
+| `sqrrl_search_kb` | Search imported knowledge base content |
+| `sqrrl_build_context_bundle` | Build a prompt-ready context bundle |
+| `sqrrl_add` | Add content to memory |
+| `sqrrl_write_event` | Write a conversation event |
+| `sqrrl_write_structured` | Write a stable structured memory |
+| `sqrrl_write_procedure` | Write a procedure or playbook memory |
+| `sqrrl_profile` | Get a synthesized user profile |
+| `sqrrl_memory_feedback` | Confirm, correct, or reject memory relevance |
+| `sqrrl_memory_get` | Get a structured or procedure memory |
+| `sqrrl_memory_update` | Update structured or procedure memory |
+| `sqrrl_memory_delete` | Delete or invalidate structured or procedure memory |
+| `sqrrl_memory_history` | Inspect structured or procedure memory history |
+
+The server intentionally excludes raw filesystem, sync, consolidation,
+benchmark, trace, job, provider-status, and embedding/vector probe operations.
+Deployment operators can use the server-local `/health` and `/ready` endpoints.
+Keep agent instructions focused on the smallest supported tool set required for
+the task.
+
+## Client guidance
+
+Add a durable rule to the client that uses this MCP server:
+
+```md
+Use Sqrrl as a read-first Company Brain. Search memory or build a context
+bundle before answering when durable company, customer, user, project, or
+workflow context would help. Do not write memory automatically. Write only when
+the user or app explicitly asks to remember, update, or forget something.
+```
+
+For client-specific snippets, see [Adapter Contract](/guides/adapters).

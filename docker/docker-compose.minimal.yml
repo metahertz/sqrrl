@@ -1,0 +1,22 @@
+# Wiki MongoDB only. Run `apps/api` on the host with
+# SQRRL_WIKI_MONGODB_URI pointing at a transaction-capable replica set.
+services:
+  mongodb:
+    image: mongo:7
+    command: ["mongod", "--replSet", "rs0", "--bind_ip_all"]
+    ports:
+      - "27017:27017"
+    volumes:
+      - sqrrl_mongo_data:/data/db
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "mongosh --quiet --eval 'try { rs.status().ok } catch (e) { rs.initiate().ok }' | grep 1",
+        ]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+volumes:
+  sqrrl_mongo_data: {}

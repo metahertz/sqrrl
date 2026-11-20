@@ -1,0 +1,32 @@
+{
+	"name": "@sqrrl/connector-slack",
+	"version": "0.1.0",
+	"private": true,
+	"description": "Syncs Slack channels, private channels, DMs and group DMs into sqrrl: raw messages in Layer 1, one distilled page per conversation-day",
+	"type": "module",
+	"license": "Apache-2.0",
+	"main": "./dist/index.js",
+	"types": "./dist/index.d.ts",
+	"bin": {
+		"sqrrl-slack-sync": "./dist/cli.js"
+	},
+	"exports": {
+		".": {
+			"types": "./dist/index.d.ts",
+			"default": "./dist/index.js"
+		}
+	},
+	"scripts": {
+		"build": "node ../../node_modules/typescript/bin/tsc -p tsconfig.json",
+		"check-types": "node ../../node_modules/typescript/bin/tsc --noEmit -p tsconfig.json && node ../../node_modules/typescript/bin/tsc -p tsconfig.test.json",
+		"test": "vitest run src/"
+	},
+	"dependencies": {
+		"@sqrrl/client": "workspace:*",
+		"@sqrrl/lib": "workspace:*"
+	},
+	"devDependencies": {
+		"vitest": "^4.1.0",
+		"@types/node": "^22.10.0"
+	}
+}

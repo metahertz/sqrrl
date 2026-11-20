@@ -1,0 +1,26 @@
+{
+	"name": "@sqrrl/inference-canary",
+	"version": "0.1.0",
+	"private": true,
+	"type": "module",
+	"description": "Detects cross-request contamination on shared OpenAI-compatible inference nodes",
+	"bin": {
+		"sqrrl-inference-canary": "./src/cli.ts"
+	},
+	"scripts": {
+		"start": "node --import tsx src/cli.ts",
+		"check-types": "node ../../node_modules/typescript/bin/tsc --noEmit -p tsconfig.json",
+		"test": "vitest run src/"
+	},
+	"dependencies": {
+		"@sqrrl/connector-nextcloud": "workspace:*",
+		"@napi-rs/canvas": "^1.0.9",
+		"tsx": "^4.19.0",
+		"@sqrrl/lib": "workspace:*"
+	},
+	"devDependencies": {
+		"@types/node": "^22.10.0",
+		"typescript": "^5.8.0",
+		"vitest": "^4.1.0"
+	}
+}

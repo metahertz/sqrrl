@@ -1,0 +1,24 @@
+{
+	"name": "@sqrrl/mcp",
+	"version": "2.0.0",
+	"private": true,
+	"type": "module",
+	"description": "MCP server for Sqrrl (stdio; calls Sqrrl HTTP API)",
+	"scripts": {
+		"start": "node --import tsx src/server.ts",
+		"build": "node ../../node_modules/typescript/bin/tsc -p tsconfig.build.json",
+		"check-types": "node ../../node_modules/typescript/bin/tsc --noEmit -p tsconfig.json",
+		"test": "vitest run src/"
+	},
+	"dependencies": {
+		"@modelcontextprotocol/sdk": "^1.25.0",
+		"@sqrrl/client": "workspace:*",
+		"tsx": "^4.19.0",
+		"@sqrrl/lib": "workspace:*"
+	},
+	"devDependencies": {
+		"typescript": "^5.8.0",
+		"vitest": "^4.1.0",
+		"@types/node": "^22.10.0"
+	}
+}

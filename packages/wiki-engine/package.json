@@ -1,0 +1,43 @@
+{
+	"name": "@sqrrl/wiki-engine",
+	"version": "2.0.0",
+	"private": true,
+	"description": "SQRRL wiki engine \u2014 wiki_pages, OKF interchange, page rendering, maintenance, contradictions, governance, connectors",
+	"license": "Apache-2.0",
+	"author": "SQRRL contributors (derived from MDBrain by Rom Iluz)",
+	"keywords": [
+		"sqrrl",
+		"wiki",
+		"mongodb",
+		"knowledge",
+		"ai"
+	],
+	"type": "module",
+	"main": "./dist/index.js",
+	"types": "./dist/index.d.ts",
+	"files": [
+		"dist",
+		"README.md"
+	],
+	"exports": {
+		".": {
+			"types": "./dist/index.d.ts",
+			"default": "./dist/index.js"
+		}
+	},
+	"scripts": {
+		"build": "node ../../node_modules/typescript/bin/tsc -p tsconfig.json",
+		"check-types": "node ../../node_modules/typescript/bin/tsc --noEmit -p tsconfig.json",
+		"test": "vitest run"
+	},
+	"dependencies": {
+		"@sqrrl/lib": "2.0.0",
+		"js-yaml": "^4.1.0",
+		"mongodb": "^7.0.0"
+	},
+	"devDependencies": {
+		"@types/js-yaml": "^4.0.9",
+		"@types/node": "^22.10.0",
+		"vitest": "^4.1.0"
+	}
+}

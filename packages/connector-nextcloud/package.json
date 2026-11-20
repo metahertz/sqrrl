@@ -1,0 +1,37 @@
+{
+	"name": "@sqrrl/connector-nextcloud",
+	"version": "0.1.0",
+	"private": true,
+	"description": "Syncs Nextcloud files (by folder or system tag) and Notes into the sqrrl wiki, extracting text from documents, images and audio locally",
+	"type": "module",
+	"license": "Apache-2.0",
+	"main": "./dist/index.js",
+	"types": "./dist/index.d.ts",
+	"bin": {
+		"sqrrl-nextcloud-sync": "./dist/cli.js"
+	},
+	"exports": {
+		".": {
+			"types": "./dist/index.d.ts",
+			"default": "./dist/index.js"
+		}
+	},
+	"scripts": {
+		"build": "node ../../node_modules/typescript/bin/tsc -p tsconfig.json",
+		"check-types": "node ../../node_modules/typescript/bin/tsc --noEmit -p tsconfig.json && node ../../node_modules/typescript/bin/tsc -p tsconfig.test.json",
+		"test": "vitest run src/"
+	},
+	"dependencies": {
+		"@sqrrl/client": "workspace:*",
+		"@sqrrl/extract": "workspace:*",
+		"@sqrrl/wiki-engine": "workspace:*",
+		"fast-xml-parser": "^5.11.1",
+		"fflate": "^0.8.3",
+		"@sqrrl/lib": "workspace:*"
+	},
+	"devDependencies": {
+		"@types/node": "^22.10.0",
+		"typescript": "^5.8.0",
+		"vitest": "^4.1.0"
+	}
+}

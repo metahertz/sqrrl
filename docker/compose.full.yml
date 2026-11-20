@@ -1,0 +1,61 @@
+# One-command full stack: MongoDB + Atlas Search → sqrrl-api → web console.
+#
+# Usage (from repo root):
+#   docker compose -f docker/compose.full.yml up -d
+#   open http://127.0.0.1:3040
+#
+# Security: default keys are development placeholders and every host port is
+# bound to loopback. Set SQRRL_API_KEY to a real secret
+# before exposing ports beyond localhost. VOYAGE_API_KEY (Atlas model API
+# key, al-... prefix) is optional and enables auto-embeddings / vector
+# search lanes; without it the stack boots degraded (text search only).
+
+services:
+  mongodb:
+    image: mongodb/mongodb-atlas-local:preview
+    container_name: sqrrl-full-mongodb
+    environment:
+      - VOYAGE_API_KEY=${VOYAGE_API_KEY:-}
+      - MONGODB_ATLAS_TELEMETRY_ENABLE=false
+    volumes:
+      - sqrrl_full_mongo_data:/data/db
+      - sqrrl_full_mongo_config:/data/configdb
+    healthcheck:
+      test: ["CMD", "/usr/local/bin/runner", "healthcheck"]
+      interval: 10s
+      timeout: 10s
+      retries: 10
+      start_period: 30s
+
+  sqrrl-api:
+    build:
+      context: ..
+      dockerfile: apps/api/Dockerfile
+    image: sqrrl-api:local
+    environment:
+      SQRRL_API_HOST: 0.0.0.0
+      SQRRL_WIKI_MONGODB_URI: mongodb://mongodb:27017
+      SQRRL_API_KEY: ${SQRRL_API_KEY:-dev-sqrrl-key}
+      SQRRL_API_CORS_ORIGINS: http://localhost:3040,http://127.0.0.1:3040
+    ports:
+      - "127.0.0.1:${SQRRL_API_PORT:-3847}:3847"
+    depends_on:
+      mongodb:
+        condition: service_healthy
+
+  web:
+    build:
+      context: ..
+      dockerfile: apps/web/Dockerfile
+      args:
+        NEXT_PUBLIC_SQRRL_API_URL: ${NEXT_PUBLIC_SQRRL_API_URL:-http://127.0.0.1:3847}
+    image: sqrrl-web:local
+    ports:
+      - "127.0.0.1:${SQRRL_WEB_PORT:-3040}:3040"
+    depends_on:
+      sqrrl-api:
+        condition: service_healthy
+
+volumes:
+  sqrrl_full_mongo_data: {}
+  sqrrl_full_mongo_config: {}
