@@ -176,3 +176,9 @@ export {
 	redactSecrets,
 } from "./redact.js"
 export * from "./task-review/index.js"
+export {
+	listMeetingsWith,
+	MEETINGS_WITH_LIMIT,
+	type MeetingsWith,
+	participantPatterns,
+} from "./meetings-with.js"

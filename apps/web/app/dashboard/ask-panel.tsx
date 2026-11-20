@@ -2,6 +2,8 @@
 
 import type { SqrrlClient } from "@sqrrl/client"
 import { useCallback, useEffect, useState } from "react"
+import type { AnswerExtras } from "./answer-details.js"
+import { AnswerContext, AnswerVerification } from "./answer-details-view.js"
 import {
 	type AnswerCitation,
 	rawFootnotes,
@@ -10,15 +12,17 @@ import {
 import { buttonStyle, fieldStyle, palette } from "./shared.js"
 import { wikiPageUrl } from "./wiki-links.js"
 
-type AnswerResponse = {
+/** Up to this many quoted sources are shown open under the answer. */
+const OPEN_SOURCES = 3
+
+type AnswerResponse = AnswerExtras & {
 	answer: string
 	found: boolean
 	citations: AnswerCitation[]
 	pages: Array<{ slug: string; title: string; source: string; cited: boolean }>
-	raw: Array<{ id: string; cited: boolean }>
+	raw: Array<{ id: string; cited: boolean; source?: string; title?: string }>
 	rerank?: string
 	degraded?: string[]
-	droppedCitations?: string[]
 }
 
 /** Ask the brain a question (POST /v1/wiki/answer). Page citations open the
@@ -45,6 +49,13 @@ export function AskPanel({
 	const [asking, setAsking] = useState(false)
 	const [result, setResult] = useState<AnswerResponse | null>(null)
 	const [error, setError] = useState<string | null>(null)
+	const [tookMs, setTookMs] = useState<number | null>(null)
+	/** Quoted sources start folded when there are many of them. */
+	const [sourcesOpen, setSourcesOpen] = useState(true)
+	useEffect(() => {
+		if (result)
+			setSourcesOpen(rawFootnotes(result.citations).length <= OPEN_SOURCES)
+	}, [result])
 
 	const ask = useCallback(
 		async (override?: string) => {
@@ -53,6 +64,7 @@ export function AskPanel({
 			setAsking(true)
 			setError(null)
 			setResult(null)
+			const started = performance.now()
 			try {
 				setResult(
 					(await client.wikiAnswer({
@@ -61,6 +73,7 @@ export function AskPanel({
 						scopeRef,
 					})) as AnswerResponse,
 				)
+				setTookMs(performance.now() - started)
 			} catch (err) {
 				setError(err instanceof Error ? err.message : String(err))
 			} finally {
@@ -117,10 +130,15 @@ export function AskPanel({
 			) : null}
 
 			{result ? (
-				<div style={{ marginTop: 12 }}>
+				<div>
+					<AnswerContext
+						extras={result}
+						pageLink={pageLink}
+						openCitation={openCitation}
+					/>
 					<p
 						style={{
-							margin: 0,
+							margin: "12px 0 0",
 							fontSize: 14,
 							lineHeight: 1.6,
 							whiteSpace: "pre-wrap",
@@ -155,6 +173,17 @@ export function AskPanel({
 								<a
 									key={s.at}
 									href={`#raw-${s.id}`}
+									onClick={(e) => {
+										// The list may be folded: open it, then go to the quote.
+										e.preventDefault()
+										setSourcesOpen(true)
+										requestAnimationFrame(() =>
+											document.getElementById(`raw-${s.id}`)?.scrollIntoView({
+												block: "center",
+												behavior: "smooth",
+											}),
+										)
+									}}
 									title="Quoted source text, below"
 									style={{
 										color: palette.accentDark,
@@ -171,37 +200,64 @@ export function AskPanel({
 					</p>
 
 					{footnotes.length ? (
-						<ol
-							style={{
-								margin: "12px 0 0",
-								paddingLeft: 22,
-								fontSize: 12.5,
-								color: palette.label,
-							}}
+						<details
+							open={sourcesOpen}
+							onToggle={(e) => setSourcesOpen(e.currentTarget.open)}
+							style={{ margin: "12px 0 0" }}
 						>
-							{footnotes.map((c) => (
-								<li key={c.id} id={`raw-${c.id}`} style={{ marginBottom: 6 }}>
-									<span style={{ color: palette.muted }}>
-										{c.source}
-										{c.title ? ` · ${c.title}` : ""}
-										{c.occurredAt ? ` · ${c.occurredAt.slice(0, 10)}` : ""}
-									</span>
-									<blockquote
-										style={{
-											margin: "2px 0 0",
-											paddingLeft: 8,
-											borderLeft: `2px solid ${palette.border}`,
-											whiteSpace: "pre-wrap",
-										}}
-									>
-										{c.quote}
-									</blockquote>
-								</li>
-							))}
-						</ol>
+							<summary
+								style={{
+									cursor: "pointer",
+									fontSize: 12,
+									color: palette.muted,
+								}}
+							>
+								{footnotes.length} quoted{" "}
+								{footnotes.length === 1 ? "source" : "sources"}
+							</summary>
+							<ol
+								style={{
+									margin: "6px 0 0",
+									paddingLeft: 22,
+									fontSize: 12.5,
+									color: palette.label,
+								}}
+							>
+								{footnotes.map((c) => (
+									<li key={c.id} id={`raw-${c.id}`} style={{ marginBottom: 6 }}>
+										<span style={{ color: palette.muted }}>
+											{c.source}
+											{c.title ? ` · ${c.title}` : ""}
+											{c.occurredAt ? ` · ${c.occurredAt.slice(0, 10)}` : ""}
+										</span>
+										<blockquote
+											style={{
+												margin: "2px 0 0",
+												paddingLeft: 8,
+												borderLeft: `2px solid ${palette.border}`,
+												whiteSpace: "pre-wrap",
+											}}
+										>
+											{c.quote}
+										</blockquote>
+									</li>
+								))}
+							</ol>
+						</details>
 					) : null}
 
-					<p style={{ margin: "10px 0 0", fontSize: 12, color: palette.muted }}>
+					<AnswerVerification
+						extras={result}
+						rawTitle={(id) => {
+							const r = result.raw.find((x) => x.id === id)
+							return r
+								? [r.source, r.title].filter(Boolean).join(" · ")
+								: undefined
+						}}
+						pageLink={pageLink}
+						openCitation={openCitation}
+					/>
+					<p style={{ margin: "6px 0 0", fontSize: 12, color: palette.muted }}>
 						{result.found
 							? `${result.citations.length} cited`
 							: "Nothing stored answers this."}
@@ -211,9 +267,7 @@ export function AskPanel({
 						{result.degraded?.length
 							? ` · ${result.degraded.join(", ")} search unavailable`
 							: ""}
-						{result.droppedCitations?.length
-							? ` · ${result.droppedCitations.length} unsupported citation(s) removed`
-							: ""}
+						{tookMs !== null ? ` · ${(tookMs / 1000).toFixed(1)}s` : ""}
 					</p>
 					{result.found && uncited.length ? (
 						<p

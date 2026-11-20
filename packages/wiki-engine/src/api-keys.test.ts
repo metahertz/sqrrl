@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest"
 import {
 	API_KEY_TOKEN_PREFIX,
 	createApiKey,
+	ensureApiKeyIndexes,
 	findApiKeyByToken,
 	hashApiKeyToken,
 	isApiKeyUsable,
@@ -156,5 +157,49 @@ describe("api key store", () => {
 		expect(timingSafeHashEquals(a, hashApiKeyToken("two"))).toBe(false)
 		expect(timingSafeHashEquals(a, "")).toBe(false)
 		expect(timingSafeHashEquals(a, a.slice(0, -1))).toBe(false)
+	})
+})
+
+describe("ensureApiKeyIndexes", () => {
+	function fakeDb(existing: Array<Record<string, unknown>>) {
+		const calls: string[] = []
+		const created: Array<Record<string, unknown>> = []
+		const coll = {
+			listIndexes: () => ({ toArray: async () => existing }),
+			dropIndex: async (name: string) => {
+				calls.push(`drop ${name}`)
+			},
+			createIndexes: async (specs: Array<Record<string, unknown>>) => {
+				calls.push("create")
+				created.push(...specs)
+			},
+		}
+		return { db: { collection: () => coll } as never, calls, created }
+	}
+
+	it("makes the token index partial, so revoked keys without a hash do not collide", async () => {
+		const { db, created } = fakeDb([])
+		await ensureApiKeyIndexes(db, "t_")
+		expect(created.find((i) => i.name === "tokenHash_unique")).toMatchObject({
+			unique: true,
+			partialFilterExpression: { tokenHash: { $type: "string" } },
+		})
+	})
+
+	it("replaces an old full unique token index", async () => {
+		const { db, calls } = fakeDb([{ name: "tokenHash_unique", unique: true }])
+		await ensureApiKeyIndexes(db, "t_")
+		expect(calls).toEqual(["drop tokenHash_unique", "create"])
+	})
+
+	it("leaves a partial one alone", async () => {
+		const { db, calls } = fakeDb([
+			{
+				name: "tokenHash_unique",
+				partialFilterExpression: { tokenHash: { $type: "string" } },
+			},
+		])
+		await ensureApiKeyIndexes(db, "t_")
+		expect(calls).toEqual(["create"])
 	})
 })

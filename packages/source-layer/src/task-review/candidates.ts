@@ -35,6 +35,41 @@ function time(v: unknown): number {
 	return Number.isNaN(t) ? 0 : t
 }
 
+const DAY_MS = 86_400_000
+
+/** When the commitment was made. Normally the time the task page was
+ *  created, but a backfill (a first import, a re-sync of old notes) creates
+ *  pages long after their source: then the source's date wins. It is a day,
+ *  so the task counts as made at the end of it, and nothing from that same
+ *  day (its own source included) can close it. */
+export function taskMadeAt(
+	task: Pick<WikiPageView, "createdAt" | "frontmatter">,
+): number {
+	const created = time(task.createdAt)
+	const noteDate = (task.frontmatter as { noteDate?: unknown } | undefined)
+		?.noteDate
+	const day = typeof noteDate === "string" ? time(noteDate.slice(0, 10)) : 0
+	return day && (!created || day + DAY_MS < created) ? day + DAY_MS : created
+}
+
+/** When what a page describes happened: a meeting's start, else the
+ *  source's date, else when the page last changed. */
+export function pageHappenedAt(
+	page: Pick<WikiPageView, "updatedAt" | "frontmatter">,
+): number {
+	const fm = (page.frontmatter ?? {}) as {
+		type?: string
+		noteDate?: unknown
+		meeting?: { start?: string }
+	}
+	if (fm.type === "meeting" && fm.meeting?.start) return time(fm.meeting.start)
+	if (typeof fm.noteDate === "string") {
+		const day = time(fm.noteDate.slice(0, 10))
+		if (day) return day
+	}
+	return time(page.updatedAt)
+}
+
 export function isOpenTask(
 	p: Pick<WikiPageView, "kind" | "taskCard"> | undefined,
 ): boolean {
@@ -158,9 +193,10 @@ export async function gatherEvidence(
 		rerank?: Rerank
 	},
 ): Promise<JudgeEvidence[]> {
-	const since = time(task.createdAt)
+	const since = taskMadeAt(task)
 	// Newer than the task, and newer than the user's last dismissal for it.
 	const after = Math.max(since + SAME_RUN_MS, p.notBefore?.getTime() ?? 0)
+	const now = Date.now()
 	const dismissed = new Set(p.dismissed ?? [])
 	const out: JudgeEvidence[] = []
 	const add = (e: JudgeEvidence) => {
@@ -202,7 +238,9 @@ export async function gatherEvidence(
 		page &&
 		page.slug !== task.slug &&
 		page.kind !== "procedure" &&
-		time(page.updatedAt) > after
+		pageHappenedAt(page) > after &&
+		// A meeting next week is not evidence of anything yet.
+		pageHappenedAt(page) <= now
 	for (const slug of p.hints ?? []) {
 		const page = await getWikiPage(handle, slug, p.scope, p.scopeRef)
 		if (page && usable(page)) add(pageEvidence(page))

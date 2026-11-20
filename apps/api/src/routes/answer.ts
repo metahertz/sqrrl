@@ -30,6 +30,13 @@ import {
 	resolveCitations,
 } from "../lib/answer.js"
 import { type PeopleContext, peopleContext } from "../lib/answer-people.js"
+import {
+	describeMeetingLists,
+	type MeetingList,
+	meetingLists,
+} from "../lib/answer-meetings.js"
+import { readTimeWindow } from "../lib/answer-time.js"
+import { verifyAnswer } from "../lib/answer-verify.js"
 import { jsonError } from "../lib/errors.js"
 import {
 	createAnswerCompletion,
@@ -107,6 +114,12 @@ export function createAnswerRouter(): Hono<ApiEnvironment> {
 			: undefined
 
 		const governance = buildWikiGovContext(c, scope.scope, scope.scopeRef)
+		// "last week", "yesterday": raw items are bounded to that window, and
+		// both searches use the rest of the question so the phrase does not
+		// skew the match.
+		const when = readTimeWindow(query)
+		const searchQuery = when?.rest ?? query
+		const rawWindow = when ? { from: when.from, to: when.to } : {}
 		// People the question names, however it spells them. Best effort:
 		// a failure here only loses the extra context.
 		const people: PeopleContext = await getWikiStoreHandle()
@@ -116,7 +129,7 @@ export function createAnswerRouter(): Hono<ApiEnvironment> {
 		const [wiki, raw, rawPeople] = await Promise.allSettled([
 			getWikiStoreHandle().then((handle) =>
 				searchWikiPages(handle, {
-					query,
+					query: searchQuery,
 					...scope,
 					maxResults: maxPages as number,
 					graphExpansion: { maxDepth: maxDepth as number },
@@ -128,8 +141,9 @@ export function createAnswerRouter(): Hono<ApiEnvironment> {
 				? Promise.resolve([])
 				: rawHandle().then((handle) =>
 						searchRawItems(handle, {
-							query,
+							query: searchQuery,
 							...scope,
+							...rawWindow,
 							limit: maxRaw as number,
 							rerank,
 						}),
@@ -143,6 +157,7 @@ export function createAnswerRouter(): Hono<ApiEnvironment> {
 									searchRawItems(handle, {
 										query: q,
 										...scope,
+										...rawWindow,
 										limit: Math.min(maxRaw as number, 4),
 										rerank,
 									}),
@@ -193,19 +208,62 @@ export function createAnswerRouter(): Hono<ApiEnvironment> {
 		const rawExtra = (rawPeople.status === "fulfilled" ? rawPeople.value : [])
 			.filter((r) => !rawIds.has(r.item.id) && rawIds.add(r.item.id))
 			.slice(0, 4)
+		// A person and a window: every meeting they were in, from the
+		// calendar, so a count is exact. Best effort, like the people lookup.
+		const lists: MeetingList[] =
+			when && people.mentions.length
+				? await rawHandle()
+						.then((handle) =>
+							meetingLists(handle, {
+								...scope,
+								window: when,
+								mentions: people.mentions,
+								...(people.selfSlug ? { selfSlug: people.selfSlug } : {}),
+							}),
+						)
+						.catch(() => [])
+				: []
+		// Each meeting says whose complete list it is on: a long attendee
+		// list is cut short in the evidence, and the person may be past the cut.
+		const listedWith = new Map<string, string[]>()
+		for (const l of lists)
+			for (const item of l.items)
+				listedWith.set(item.id, [...(listedWith.get(item.id) ?? []), l.title])
+		const listNote = (id: string) => {
+			const who = listedWith.get(id)
+			return who
+				? `a meeting with ${who.join(" and ")} (complete calendar list)`
+				: undefined
+		}
+		const meetingRaw = lists
+			.flatMap((l) => l.items)
+			.filter((item) => !rawIds.has(item.id) && rawIds.add(item.id))
+			.map((item) => ({ item, score: 0, brief: true }))
 		const evidence: AnswerEvidence = {
 			pages: [
 				...hits,
 				...personPages,
 				...linked.filter((l) => !taken.has(l.page.slug)),
 			],
-			raw: [...rawHits, ...rawExtra],
+			raw: [...rawHits, ...rawExtra, ...meetingRaw].map((r) => {
+				const note = listNote(r.item.id)
+				return note ? { ...r, note } : r
+			}),
 		}
 
 		const base = {
 			...scope,
 			query,
 			rerank: rerank ? "on" : "unavailable",
+			...(when
+				? {
+						window: {
+							phrase: when.phrase,
+							from: when.from.toISOString(),
+							to: when.to.toISOString(),
+						},
+					}
+				: {}),
 			...(degraded.length ? { degraded } : {}),
 			...(people.mentions.length
 				? {
@@ -252,7 +310,17 @@ export function createAnswerRouter(): Hono<ApiEnvironment> {
 			})
 		}
 
-		const { labels, text } = labelEvidence(evidence)
+		const { labels, text, blocks } = labelEvidence(evidence)
+		const refOf = new Map(
+			[...labels.values()].map((l) => [
+				l.type === "raw" ? l.id : l.slug,
+				l.ref,
+			]),
+		)
+		const listsText =
+			when && lists.length
+				? describeMeetingLists(lists, when, (id) => refOf.get(id))
+				: ""
 		let reply: unknown
 		try {
 			reply = await complete(
@@ -262,6 +330,10 @@ export function createAnswerRouter(): Hono<ApiEnvironment> {
 					text,
 					new Date().toISOString().slice(0, 10),
 					people.note,
+					when
+						? `${when.phrase}: ${when.from.toISOString().slice(0, 10)} to ${new Date(when.to.getTime() - 1).toISOString().slice(0, 10)}`
+						: "",
+					listsText,
 				),
 			)
 		} catch (err) {
@@ -271,11 +343,22 @@ export function createAnswerRouter(): Hono<ApiEnvironment> {
 			return jsonError(c, 500, "WIKI_ANSWER_FAILED", message)
 		}
 		const modelReply = readAnswerReply(reply)
+		// Check that each cited item supports its sentence. Labels the model
+		// only listed (not inline) cannot be checked, so once the check has
+		// run, only the inline citations it kept count.
+		const verify =
+			modelReply.found && process.env.SQRRL_ANSWER_VERIFY?.trim() !== "off"
+				? await verifyAnswer(withListedLabels(modelReply), blocks, complete)
+				: undefined
+		const checked = verify && "checked" in verify ? verify : undefined
 		const parsed = resolveCitations(
-			modelReply.answer,
+			(checked ? checked.answer : modelReply.answer).replace(
+				/\s*\[complete lists?\]/gi,
+				"",
+			),
 			modelReply.found,
 			labels,
-			modelReply.cited,
+			checked ? [] : modelReply.cited,
 		)
 		const cited = new Set(
 			parsed.citations.map((x) => (x.type === "page" ? x.slug : x.id)),
@@ -288,9 +371,48 @@ export function createAnswerRouter(): Hono<ApiEnvironment> {
 			...(parsed.unknownRefs.length
 				? { droppedCitations: parsed.unknownRefs }
 				: {}),
+			...(lists.length
+				? {
+						meetings: lists.map((l) => ({
+							slug: l.slug,
+							title: l.title,
+							count: l.items.length,
+							...(l.truncated ? { truncated: true } : {}),
+						})),
+					}
+				: {}),
+			...(verify
+				? {
+						verification:
+							"checked" in verify
+								? {
+										claims: verify.checked,
+										citationsDropped: verify.citationsDropped.map((d) => ({
+											claim: d.claim,
+											citation: citationName(labels.get(d.label)) ?? d.label,
+										})),
+										claimsRemoved: verify.claimsRemoved,
+									}
+								: { unchecked: verify.unchecked },
+					}
+				: {}),
 			...listing(cited),
 		})
 	})
 
 	return answer
+}
+
+/** A label as the public citation names it: the page slug or raw id. */
+function citationName(
+	c: { type: "page"; slug: string } | { type: "raw"; id: string } | undefined,
+): string | undefined {
+	return c ? (c.type === "page" ? c.slug : `raw:${c.id}`) : undefined
+}
+
+/** An answer that cites only in its cited list is checked as one claim
+ *  citing all of them; one with inline labels is checked as written. */
+function withListedLabels(reply: { answer: string; cited: string[] }): string {
+	if (/\[[PR]\d+/.test(reply.answer) || !reply.cited.length) return reply.answer
+	return `${reply.answer.trim()} ${reply.cited.map((r) => `[${r.trim()}]`).join("")}`
 }

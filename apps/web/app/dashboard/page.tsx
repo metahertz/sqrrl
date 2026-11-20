@@ -251,9 +251,21 @@ export default function ConsolePage() {
 		}
 	}, [client, apiKey])
 
+	// The scope (and key) the console shows now. A load started for another
+	// scope may finish after a switch, a large scope last of all; its result
+	// is dropped rather than shown under the new scope's name.
+	const viewing = `${apiKey}|${scope}:${scopeRef}`
+	const viewingRef = useRef(viewing)
+	viewingRef.current = viewing
+	const stillViewing = useCallback(
+		(key: string) => viewingRef.current === key,
+		[],
+	)
+
 	/** The suggestion lists. Best effort: an older API without task review
 	 *  or identity questions just shows none. */
 	const loadLists = useCallback(async () => {
+		const asked = viewing
 		const [pending, questions] = await Promise.all([
 			client
 				.taskSuggestions({ scope, scopeRef })
@@ -262,33 +274,39 @@ export default function ConsolePage() {
 				.identitySuggestions({ scope, scopeRef })
 				.catch(() => ({ suggestions: [] })),
 		])
+		if (!stillViewing(asked)) return
 		setSuggestions(pending.suggestions as unknown as Suggestion[])
 		setIdentityQuestions(questions.suggestions)
-	}, [client, scope, scopeRef])
+	}, [client, scope, scopeRef, viewing, stillViewing])
 
 	const load = useCallback(async () => {
 		if (!apiKey.trim()) return
+		const asked = viewing
 		try {
 			const { pages: all, truncated: cut } = await fetchAllPages(
 				client,
 				scope,
 				scopeRef,
 			)
+			if (!stillViewing(asked)) return
 			setPages(all)
 			setTruncated(cut)
 			await loadLists()
+			if (!stillViewing(asked)) return
 			setLoadError(null)
 			setLoaded(true)
 		} catch (err) {
+			if (!stillViewing(asked)) return
 			setLoadError(err instanceof Error ? err.message : String(err))
 		}
-	}, [client, scope, scopeRef, apiKey, loadLists])
+	}, [client, scope, scopeRef, apiKey, loadLists, viewing, stillViewing])
 
 	/** Refetches named pages and swaps them into the list: no full reload.
 	 *  A page that is gone (404, deleted, merged away) drops out; one that
 	 *  could not be fetched for another reason keeps its old copy. */
 	const refreshPages = useCallback(
 		async (slugs: string[]) => {
+			const asked = viewing
 			const results = await Promise.all(
 				[...new Set(slugs)].map((slug) =>
 					client
@@ -301,6 +319,7 @@ export default function ConsolePage() {
 						})),
 				),
 			)
+			if (!stillViewing(asked)) return
 			setPages((prev) => {
 				let next = prev
 				for (const r of results) {
@@ -322,8 +341,18 @@ export default function ConsolePage() {
 				return next
 			})
 		},
-		[client, scope, scopeRef],
+		[client, scope, scopeRef, viewing, stillViewing],
 	)
+
+	// A new scope starts empty, so nothing from the last one shows under its
+	// name while it loads.
+	// biome-ignore lint/correctness/useExhaustiveDependencies: runs on a scope change only
+	useEffect(() => {
+		setLoaded(false)
+		setPages([])
+		setSuggestions([])
+		setIdentityQuestions([])
+	}, [scope, scopeRef])
 
 	useEffect(() => {
 		void load()
@@ -334,15 +363,19 @@ export default function ConsolePage() {
 	const loadStatus = useCallback(async () => {
 		if (!apiKey.trim()) return
 		setStatusLoading(true)
+		const asked = viewing
 		try {
-			setStatus(await client.backgroundStatus({ scope, scopeRef }))
+			const next = await client.backgroundStatus({ scope, scopeRef })
+			if (!stillViewing(asked)) return
+			setStatus(next)
 			setStatusError(null)
 		} catch (err) {
+			if (!stillViewing(asked)) return
 			setStatusError(err instanceof Error ? err.message : String(err))
 		} finally {
 			setStatusLoading(false)
 		}
-	}, [client, scope, scopeRef, apiKey])
+	}, [client, scope, scopeRef, apiKey, viewing, stillViewing])
 
 	useEffect(() => {
 		setStatus(null)

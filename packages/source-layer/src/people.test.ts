@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 import { parseRef } from "./identity.js"
-import { type HubEntry, hubEntry, matchPerson } from "./people.js"
+import { type HubEntry, hubEntry, matchPerson, slugify } from "./people.js"
 
 const hubs: HubEntry[] = [
 	hubEntry({
@@ -84,5 +84,13 @@ describe("matchPerson", () => {
 
 	it("never matches people to teams or services", () => {
 		expect(match("Travel Smith").entry).toBeUndefined()
+	})
+})
+
+describe("slugify", () => {
+	it("folds accents instead of breaking the word", () => {
+		expect(slugify("Tomás Ortega", 48)).toBe("tomas-ortega")
+		expect(slugify("Zoë Brontë-Ågren", 48)).toBe("zoe-bronte-agren")
+		expect(slugify("Kai Smith", 48)).toBe("kai-smith")
 	})
 })

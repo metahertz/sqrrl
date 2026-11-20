@@ -38,6 +38,8 @@ export interface PeopleContext {
 	/** Extra raw queries (the question with full names spelled out). */
 	rawQueries: string[]
 	pages: WikiPageView[]
+	/** The owner's person page, when known. */
+	selfSlug?: string
 }
 
 export async function peopleContext(
@@ -77,7 +79,9 @@ export async function peopleContext(
 	]
 		.filter(Boolean)
 		.join("\n")
-	if (!others.length) return { mentions, note, rawQueries: [], pages: [] }
+	const selfSlug = selfEntry?.slug
+	if (!others.length)
+		return { mentions, note, rawQueries: [], pages: [], selfSlug }
 
 	const rawQueries = others
 		.filter((m) => m.person && !m.exact)
@@ -127,7 +131,7 @@ export async function peopleContext(
 			taken++
 		}
 	}
-	return { mentions, note, rawQueries, pages }
+	return { mentions, note, rawQueries, pages, selfSlug }
 }
 
 /** The prompt line that says who "you" is. */

@@ -44,7 +44,16 @@ import { getSelfIdentity, isSelfRef } from "./self.js"
 
 export { nameFromEmail }
 
+/** Accents are folded first, so "Tomás" is people/tomas, not people/tom-s. */
 export function slugify(text: string, maxLen: number): string {
+	return legacySlugify(
+		text.normalize("NFKD").replace(/[\u0300-\u036f]/g, ""),
+		maxLen,
+	)
+}
+
+/** The slug as it was before accents were folded, for finding older hubs. */
+function legacySlugify(text: string, maxLen: number): string {
 	return (
 		text
 			.toLowerCase()
@@ -467,7 +476,11 @@ export async function resolvePersonHub(
 	if (m.ambiguous) {
 		// Link to the first-name hub for now, and ask.
 		const hubSlug = `people/${slugify(ref.first ?? ref.name, 48)}`
-		const existing = dir.entries.get(follow(dir, hubSlug))
+		const existing =
+			dir.entries.get(follow(dir, hubSlug)) ??
+			dir.entries.get(
+				follow(dir, `people/${legacySlugify(ref.first ?? ref.name, 48)}`),
+			)
 		let slug = existing?.slug ?? hubSlug
 		let created = false
 		if (!existing) {

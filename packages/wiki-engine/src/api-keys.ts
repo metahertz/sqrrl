@@ -92,14 +92,37 @@ export function isApiKeyUsable(
 	return true
 }
 
+const TOKEN_HASH_INDEX = "tokenHash_unique"
+
 export async function ensureApiKeyIndexes(
 	db: Db,
 	prefix: string,
 ): Promise<void> {
 	const coll = apiKeysCollection(db, prefix)
+	// A revoked key has no token hash, and a plain unique index counts every
+	// missing hash as the same null: the second revocation then failed with
+	// a duplicate key. Indexes made before the partial filter are replaced.
+	let existing: Array<{ name?: string; partialFilterExpression?: unknown }> = []
+	try {
+		existing = (await coll.listIndexes().toArray()) as typeof existing
+	} catch {
+		// No collection yet (or a store without index listing): nothing to replace.
+	}
+	if (
+		existing.some(
+			(i) => i.name === TOKEN_HASH_INDEX && !i.partialFilterExpression,
+		)
+	)
+		await coll.dropIndex(TOKEN_HASH_INDEX)
 	await coll.createIndexes([
-		// The authentication lookup: one indexed equality match per request.
-		{ key: { tokenHash: 1 }, unique: true, name: "tokenHash_unique" },
+		// The authentication lookup: one indexed equality match per request,
+		// unique among keys that still have a token.
+		{
+			key: { tokenHash: 1 },
+			unique: true,
+			name: TOKEN_HASH_INDEX,
+			partialFilterExpression: { tokenHash: { $type: "string" } },
+		},
 		{ key: { keyId: 1 }, unique: true, name: "keyId_unique" },
 		// subjectId identifies the principal in audit records and must not be
 		// reused, or a revoked key's history merges with its replacement's.

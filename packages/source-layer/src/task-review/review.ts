@@ -16,7 +16,12 @@ import {
 	type WikiPageView,
 } from "@sqrrl/wiki-engine"
 import type { searchRawItems } from "../raw-items.js"
-import { gatherEvidence, isOpenTask, tasksForSourcePage } from "./candidates.js"
+import {
+	gatherEvidence,
+	taskMadeAt,
+	isOpenTask,
+	tasksForSourcePage,
+} from "./candidates.js"
 import {
 	buildJudgePrompt,
 	parseJudgeReply,
@@ -85,7 +90,9 @@ export async function reviewTask(
 			{
 				title: task.title,
 				...(card?.owner ? { owner: card.owner } : {}),
-				...(task.createdAt ? { createdAt: String(task.createdAt) } : {}),
+				...(task.createdAt
+					? { createdAt: new Date(madeOn(task)).toISOString() }
+					: {}),
 				...(card?.dueDate ? { dueDate: card.dueDate } : {}),
 				...(task.body?.trim()
 					? { context: task.body.trim().slice(0, 400) }
@@ -217,4 +224,11 @@ export async function sweep(
 		})
 	const run = await processQueue(handle, deps, { ...p, limit })
 	return { ...run, swept: slugs.length }
+}
+
+/** The day the commitment was made, for the judge: the source's day when
+ *  the task was backfilled (taskMadeAt is the end of that day). */
+function madeOn(task: WikiPageView): number {
+	const at = taskMadeAt(task)
+	return at < Date.parse(String(task.createdAt)) ? at - 86_400_000 : at
 }

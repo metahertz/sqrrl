@@ -32,7 +32,12 @@ vi.mock("@sqrrl/wiki-engine", () => ({
 vi.mock("../raw-items.js", () => raw)
 vi.mock("./store.js", () => store)
 
-import { gatherEvidence, tasksForSourcePage } from "./candidates.js"
+import {
+	gatherEvidence,
+	pageHappenedAt,
+	taskMadeAt,
+	tasksForSourcePage,
+} from "./candidates.js"
 import { processQueue, reviewTask, sweep } from "./review.js"
 
 const S = { scope: "workspace", scopeRef: "default" }
@@ -388,6 +393,86 @@ describe("processQueue and sweep", () => {
 				taskSlugs: ["tasks/a", "tasks/b"],
 				reason: "sweep",
 			}),
+		)
+	})
+})
+
+describe("backfilled tasks", () => {
+	const fm = (noteDate?: string) => (noteDate ? { type: "task", noteDate } : {})
+	it("dates a task from its source's day when the page came much later", () => {
+		expect(
+			taskMadeAt({
+				createdAt: "2026-11-20T21:00:00.000Z",
+				frontmatter: fm("2026-11-05"),
+			} as never),
+		).toBe(Date.parse("2026-11-06T00:00:00Z"))
+		// Made live: the page's own creation time stands.
+		expect(
+			taskMadeAt({
+				createdAt: "2026-11-05T09:30:00.000Z",
+				frontmatter: fm("2026-11-05"),
+			} as never),
+		).toBe(Date.parse("2026-11-05T09:30:00.000Z"))
+		expect(taskMadeAt({ createdAt: "2026-11-05T09:30:00.000Z" } as never)).toBe(
+			Date.parse("2026-11-05T09:30:00.000Z"),
+		)
+	})
+
+	it("dates a page by what it describes, not when it was written", () => {
+		const updatedAt = "2026-11-20T21:00:00.000Z"
+		expect(
+			pageHappenedAt({
+				updatedAt,
+				frontmatter: {
+					type: "meeting",
+					meeting: { start: "2026-11-12T14:00:00Z" },
+				},
+			} as never),
+		).toBe(Date.parse("2026-11-12T14:00:00Z"))
+		expect(
+			pageHappenedAt({
+				updatedAt,
+				frontmatter: { noteDate: "2026-11-08" },
+			} as never),
+		).toBe(Date.parse("2026-11-08"))
+		expect(pageHappenedAt({ updatedAt } as never)).toBe(Date.parse(updatedAt))
+	})
+
+	it("finds evidence between the source's day and the backfill, and skips future meetings", async () => {
+		raw.searchRawItems.mockResolvedValue([])
+		const now = Date.now()
+		engine.pages.set("meetings/next-week", {
+			slug: "meetings/next-week",
+			title: "Sync",
+			kind: "source",
+			updatedAt: new Date(now).toISOString(),
+			summary: "Upcoming",
+			frontmatter: {
+				type: "meeting",
+				meeting: { start: new Date(now + 7 * 86_400_000).toISOString() },
+			},
+		})
+		engine.pages.set("sources/email/sent", {
+			slug: "sources/email/sent",
+			title: "Sent it",
+			kind: "source",
+			updatedAt: new Date(now).toISOString(),
+			summary: "Sent the criteria",
+			frontmatter: { noteDate: "2026-11-07" },
+		})
+		engine.search.mockResolvedValue({ results: [] })
+		const t = {
+			...task("tasks/me-send-criteria"),
+			createdAt: new Date(now).toISOString(),
+			frontmatter: { type: "task", noteDate: "2026-11-05" },
+		} as never
+		const out = await gatherEvidence(handle, t, {
+			...S,
+			hints: ["meetings/next-week", "sources/email/sent"],
+		})
+		expect(out.map((e) => e.key)).toEqual(["page:sources/email/sent"])
+		expect(raw.searchRawItems.mock.calls.at(-1)?.[1].from).toEqual(
+			new Date(Date.parse("2026-11-06T00:00:00Z") + 10 * 60_000),
 		)
 	})
 })

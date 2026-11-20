@@ -273,3 +273,44 @@ describe("ownerLine", () => {
 		)
 	})
 })
+
+describe("buildAnswerPrompt time window", () => {
+	it("states the window after the date", () => {
+		const prompt = buildAnswerPrompt(
+			"what did Kai say?",
+			"[R1] x",
+			"2026-11-20",
+			"",
+			"last week: 2026-11-09 to 2026-11-15",
+		)
+		expect(prompt).toContain(
+			"Today: 2026-11-20\nTime window: last week: 2026-11-09 to 2026-11-15",
+		)
+	})
+})
+
+describe("labelEvidence notes", () => {
+	it("says whose complete list a meeting is on", () => {
+		const { text } = labelEvidence({
+			pages: [],
+			raw: [
+				{
+					item: {
+						id: "m1",
+						source: "calendar",
+						sourceId: "s",
+						title: "Design sync",
+						text: "Meeting: Design sync",
+						occurredAt: new Date("2026-10-14T13:00:00Z"),
+					} as never,
+					score: 0,
+					brief: true,
+					note: "a meeting with Taylor Pryce (complete calendar list)",
+				},
+			],
+		})
+		expect(text).toContain(
+			'[R1] raw calendar "Design sync" on 2026-10-14 — a meeting with Taylor Pryce (complete calendar list)',
+		)
+	})
+})

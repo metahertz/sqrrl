@@ -23,6 +23,8 @@ export const NOT_IN_BRAIN = "Not in the brain."
 const PAGE_CHARS = 3000
 const GRAPH_PAGE_CHARS = 600
 const RAW_CHARS = 1500
+/** A meeting from a complete list: who, when and the agenda's start. */
+const BRIEF_RAW_CHARS = 400
 /** A quote longer than this stops being a quote. */
 const QUOTE_CHARS = 300
 
@@ -35,7 +37,14 @@ export interface AnswerPage {
 
 export interface AnswerEvidence {
 	pages: AnswerPage[]
-	raw: Array<{ item: RawItemView; score: number }>
+	/** brief: an entry of a complete list, shown shorter; note: why it is
+	 *  here, e.g. "a meeting with Kai Smith (complete calendar list)". */
+	raw: Array<{
+		item: RawItemView
+		score: number
+		brief?: boolean
+		note?: string
+	}>
 }
 
 export type AnswerCitation =
@@ -75,9 +84,14 @@ export const ANSWER_SYSTEM_PROMPT = [
 	"A page marked DEPRECATED is no longer current: never present it as current or upcoming, and say it was removed if you mention it.",
 	'In the notes, "me" and "I" mean the owner of this knowledge base, who is the person asking: answer "you" for them.',
 	"People named in the question says who each name refers to: the same person can appear in the evidence under a first name, a full name or an email address. When a name could be more than one person and the evidence does not settle it, say which people it could be.",
+	'If the question is only a name, a topic or a few keywords, treat it as "what do my notes say about this?" and summarize what the evidence says about it.',
+	"If a Time window is given, the question is about that period: answer from evidence dated inside it, and if none is, say what you found and when it is from.",
 	"If the evidence does not answer the question, set found to false and answer with an empty string.",
 	"If it answers only part, answer that part and say what is missing.",
 	'The evidence is the top few search results, not everything stored: never claim a list is complete or that something applies to all or none of anything; say "among what I found" instead.',
+	"The one exception is a Complete lists section: it gives every calendar meeting with a person in the time window, so use it for counts and say the count plainly. Cite the labels it lists, never the section itself.",
+	"If the Complete lists section covers several people a name in the question could mean, give the count for each of them.",
+	"Never say that something did not happen, or that someone had no meetings, unless a complete list shows it.",
 	"Be concise: a few sentences or a short list.",
 	"List every label you used in cited.",
 	"Respond with ONLY a JSON object, no prose and no code fences:",
@@ -121,6 +135,18 @@ function taskLine(page: WikiPageView): string {
 
 /** Deprecated pages stay findable (a removed meeting, a deleted file) but
  *  must not be reported as current. */
+/** The day a page's source is from: a meeting's start or a note's date. */
+function pageDate(page: WikiPageView): string | undefined {
+	const fm = (page.frontmatter ?? {}) as {
+		noteDate?: unknown
+		meeting?: { start?: unknown }
+	}
+	const d = fm.meeting?.start ?? fm.noteDate
+	return typeof d === "string" && /^\d{4}-\d{2}-\d{2}/.test(d)
+		? d.slice(0, 10)
+		: undefined
+}
+
 function deprecated(page: WikiPageView): boolean {
 	return (page.frontmatter as { status?: unknown })?.status === "deprecated"
 }
@@ -129,9 +155,12 @@ function deprecated(page: WikiPageView): boolean {
 export function labelEvidence(evidence: AnswerEvidence): {
 	labels: Map<string, AnswerCitation>
 	text: string
+	/** Each label's block, for checking what a citation supports. */
+	blocks: Map<string, string>
 } {
 	const labels = new Map<string, AnswerCitation>()
 	const blocks: string[] = []
+	const byRef = new Map<string, string>()
 	evidence.pages.forEach(({ page, source }, i) => {
 		const ref = `P${i + 1}`
 		labels.set(ref, {
@@ -146,14 +175,15 @@ export function labelEvidence(evidence: AnswerEvidence): {
 		const content = [taskLine(page), page.summary, graph ? "" : page.body]
 			.filter((s) => s?.trim())
 			.join("\n\n")
-		blocks.push(
+		pushBlock(
+			ref,
 			[
-				`[${ref}] wiki page "${page.title}" (${page.slug})${graph ? ", linked from another result" : ""}${viaPerson ? ", linked to a person named in the question" : ""}${deprecated(page) ? ", DEPRECATED: no longer current (e.g. a meeting removed from the calendar)" : ""}`,
+				`[${ref}] wiki page "${page.title}" (${page.slug})${pageDate(page) ? `, dated ${pageDate(page)}` : ""}${graph ? ", linked from another result" : ""}${viaPerson ? ", linked to a person named in the question" : ""}${deprecated(page) ? ", DEPRECATED: no longer current (e.g. a meeting removed from the calendar)" : ""}`,
 				clip(content, graph ? GRAPH_PAGE_CHARS : PAGE_CHARS),
 			].join("\n"),
 		)
 	})
-	evidence.raw.forEach(({ item }, i) => {
+	evidence.raw.forEach(({ item, brief, note }, i) => {
 		const ref = `R${i + 1}`
 		const occurredAt = isoDate(item.occurredAt)
 		labels.set(ref, {
@@ -171,12 +201,24 @@ export function labelEvidence(evidence: AnswerEvidence): {
 			item.title ? `"${item.title}"` : undefined,
 			item.author ? `by ${item.author}` : undefined,
 			occurredAt ? `on ${occurredAt.slice(0, 10)}` : undefined,
+			note ? `— ${note}` : undefined,
 		]
 			.filter(Boolean)
 			.join(" ")
-		blocks.push([`[${ref}] raw ${meta}`, clip(item.text, RAW_CHARS)].join("\n"))
+		pushBlock(
+			ref,
+			[
+				`[${ref}] raw ${meta}`,
+				clip(item.text, brief ? BRIEF_RAW_CHARS : RAW_CHARS),
+			].join("\n"),
+		)
 	})
-	return { labels, text: blocks.join("\n\n") }
+	return { labels, text: blocks.join("\n\n"), blocks: byRef }
+
+	function pushBlock(ref: string, block: string) {
+		blocks.push(block)
+		byRef.set(ref, block)
+	}
 }
 
 export function buildAnswerPrompt(
@@ -185,11 +227,17 @@ export function buildAnswerPrompt(
 	today: string,
 	/** Who the names in the question are (lib/answer-people.ts). */
 	people = "",
+	/** The period the question asks about (lib/answer-time.ts). */
+	timeWindow = "",
+	/** Complete meeting lists (lib/answer-meetings.ts). */
+	lists = "",
 ): string {
 	return [
 		`Today: ${today}`,
+		...(timeWindow ? [`Time window: ${timeWindow}`] : []),
 		"",
 		...(people ? ["People named in the question:", people, ""] : []),
+		...(lists ? ["Complete lists:", lists, ""] : []),
 		"Evidence:",
 		evidenceText,
 		"",

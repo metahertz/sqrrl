@@ -16,6 +16,11 @@
   <a href="#thanks">Thanks</a>
 </p>
 
+<p align="center">
+  <img src="assets/screenshots/overview.png" alt="The SQRRL console overview: open and overdue tasks, meetings, notes and people, and suggestions to close tasks with the quote that shows they are done" width="900">
+  <br><sub>Screenshots show a made-up demo workspace.</sub>
+</p>
+
 ---
 
 ## Why
@@ -93,9 +98,17 @@ and support time-range recall ("what did Kai say last week").
   open tasks and suggests "done" or "dropped", grounded in a quote. Nothing
   changes until you accept.
 
+<p align="center">
+  <img src="assets/screenshots/tasks.png" alt="The task list: owners, the note each task came from, how late it is, and a looks done badge where evidence suggests it was finished" width="800">
+</p>
+
 **Use it.**
 
 - **Ask**: cited answers over the wiki and the raw layer (`POST /v1/wiki/answer`).
+  Time words ("last week", "this month") narrow the search; a question about
+  a person and a period counts their meetings from the calendar, not from
+  search hits; and a second pass checks every citation against what it
+  cites, removing any that don't hold up.
 - **Web console** (`apps/web`):
   - overview and tasks
   - the wiki
@@ -106,6 +119,14 @@ and support time-range recall ("what did Kai say last week").
   merge, reassign, set status, decide suggestions) from Claude or any MCP
   client.
 - **Read-only wiki** at `/wiki` for plain browsing.
+
+<p align="center">
+  <img src="assets/screenshots/ask.png" alt="Ask: a question about meetings with a colleague this month, answered with a count from the calendar, one cited line per meeting, and a note that every citation was checked" width="800">
+</p>
+
+<p align="center">
+  <img src="assets/screenshots/graph.png" alt="The graph in dark mode: notes, meetings, tasks, people and topics as colored nodes, with a project topic and a colleague as hubs" width="800">
+</p>
 
 **Run it.**
 
